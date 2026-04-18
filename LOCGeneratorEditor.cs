@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -87,6 +87,55 @@ public class LOCGeneratorWindow : EditorWindow
 
     #endregion
 
+    #region Importer
+
+    public static class LOCImporter
+    {
+        public static LOCResult ImportFromFile(string path)
+        {
+            if (!File.Exists(path))
+            {
+                Debug.LogError("File not found");
+                return null;
+            }
+
+            var result = new LOCResult();
+            var lines = File.ReadAllLines(path);
+
+            foreach (var line in lines)
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                if (line.StartsWith("Total")) continue;
+
+                int splitIndex = line.LastIndexOf(" - ");
+                if (splitIndex < 0) continue;
+
+                string filePath = line.Substring(0, splitIndex);
+                string right = line.Substring(splitIndex + 3);
+
+                int lineCount = ParseLineCount(right);
+
+                result.Files.Add(new LOCFileStat
+                {
+                    Path = filePath,
+                    Lines = lineCount
+                });
+
+                result.TotalLines += lineCount;
+            }
+
+            return result;
+        }
+
+        private static int ParseLineCount(string text)
+        {
+            var number = new string(text.TakeWhile(char.IsDigit).ToArray());
+            return int.TryParse(number, out int value) ? value : 0;
+        }
+    }
+
+    #endregion
+
     #region Window
 
     private List<string> includeFolders = new();
@@ -162,6 +211,11 @@ public class LOCGeneratorWindow : EditorWindow
             Export();
         }
 
+        if (GUILayout.Button("Import File", GUILayout.Height(35)))
+        {
+            Import();
+        }
+
         GUILayout.EndHorizontal();
 
         GUILayout.Space(10);
@@ -206,6 +260,22 @@ public class LOCGeneratorWindow : EditorWindow
         AssetDatabase.Refresh();
 
         Debug.Log("LOC exported");
+    }
+
+    private void Import()
+    {
+        string path = EditorUtility.OpenFilePanel("Import LOC Report", "", "txt");
+
+        if (string.IsNullOrEmpty(path))
+            return;
+
+        currentResult = LOCImporter.ImportFromFile(path);
+
+        if (currentResult != null)
+        {
+            SortResults();
+            Debug.Log("LOC imported");
+        }
     }
 
     private void SortResults()
